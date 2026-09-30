@@ -60,20 +60,33 @@ graph TD
   - Word-level and line-level confidence scoring with mean confidence aggregation.
   - Skew/orientation angle detection in degrees.
 
-- **Zero-Allocation Image Buffering**:
+- **Zero-Allocation Image Buffering & Pooling**:
   - `OcrImageBuffer` wraps contiguous managed/unmanaged byte buffers without LOH heap fragmentation.
+  - Native `OcrImageBuffer.Rent(width, height, format)` backed by `ArrayPool<byte>.Shared` for zero GC pressure during 4K/high-res scanning.
   - Supported pixel formats: `Bgra32`, `Rgba32`, `Rgb24`, `Bgr24`, `Gray8`.
   - Zero-copy cropping for Region Of Interest (ROI) scanning.
 
-- **Embedded Pre-processing Kernels**:
-  - `OcrPreprocessor.ToGrayscale`: Fast ITU-R BT.601 integer conversion.
-  - `OcrPreprocessor.BinarizeOtsu`: Dynamic bimodal histogram thresholding.
-  - `OcrPreprocessor.Binarize`: Fixed thresholding.
-  - `OcrPreprocessor.Invert`: Negative polarity conversion for inverted text.
+- **SIMD AVX2 Acceleration & Pre-processing**:
+  - Hardware-accelerated vectorized pre-processing kernels (`Vector256<byte>` / AVX2):
+    - `OcrPreprocessor.ToGrayscale`: ITU-R BT.601 fixed-point SIMD conversion (`>> 8`).
+    - `OcrPreprocessor.Binarize`: Branchless AVX2 SIMD thresholding.
+    - `OcrPreprocessor.BinarizeOtsu`: Dynamic bimodal histogram thresholding.
+    - `OcrPreprocessor.Invert`: Vectorized negative polarity conversion for inverted text.
+
+- **Packaging & Manufacturing Vision Extensions**:
+  - `OcrMorphology`: 3x3 structuring element morphological operations (Dilation, Erosion, Closing) designed to fuse dot-matrix inkjet dots into solid characters for high-accuracy OCR.
+  - `ProjectionProfileDeskewer`: Horizontal Projection Profile (HPP) variance maximization algorithm with bilinear deskewing ($\pm 15^\circ$) for angled packaging.
+  - `MultiRoiOcrInspectionPipeline`: Concurrent multi-zone inspection with engine pooling and master coordinate remapping.
+
+- **Spatial Analysis & Inspection Judgement**:
+  - `OcrKeyValueExtractor`: 2D spatial key-value pair discovery (Right/Below alignment).
+  - `OcrPatternMatcher`: Regex extraction for Dates, Tax IDs, LOT/Batch codes, and Amounts.
+  - `OcrInspectionJudge`: Industrial Pass/Fail verdict evaluator (Substring, Regex, Expiry Date).
 
 - **Native Windows Engine (`WindowsOcrEngine`)**:
-  - Built-in Windows 10/11 OCR without requiring external model weights or C++ dependencies.
+  - Built-in Windows 10/11 WinRT OCR (`Windows.Media.Ocr`) without external model weights or C++ dependencies.
   - Reusable concurrent engine cache (`ConcurrentDictionary<string, OcrEngine>`) to eliminate runtime engine creation overhead.
+  - `OcrVisualOverlay`: High-performance GDI+ overlay renderer for bounding boxes, confidence tags, and PASS/FAIL badges.
 
 ---
 
