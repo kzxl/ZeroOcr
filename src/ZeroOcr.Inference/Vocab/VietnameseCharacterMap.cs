@@ -59,7 +59,10 @@ public sealed class VietnameseCharacterMap
             throw new FileNotFoundException("Vocabulary file not found.", filePath);
 
         var lines = File.ReadAllLines(filePath, Encoding.UTF8);
-        var chars = new List<char>(lines.Length);
+        var chars = new List<char>(lines.Length + 2);
+
+        // Index 0 in CTC sequence modeling is reserved for the blank token
+        chars.Add(' ');
 
         foreach (var line in lines)
         {
