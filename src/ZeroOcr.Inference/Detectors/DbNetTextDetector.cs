@@ -75,22 +75,33 @@ public sealed class DbNetTextDetector : ITextDetector
         targetW = Math.Max(32, targetW);
         targetH = Math.Max(32, targetH);
 
-        // 2. Prepare normalized input tensor [1, 3, targetH, targetW] (NCHW)
-        var tensor = new DenseTensor<float>(new[] { 1, 3, targetH, targetW });
-        FillNormalizedTensor(image, tensor, targetW, targetH);
+        // 2. Prepare normalized input tensor [1, 3, targetH, targetW] (NCHW) via ArrayPool
+        int totalElements = 3 * targetH * targetW;
+        float[] rentedArray = System.Buffers.ArrayPool<float>.Shared.Rent(totalElements);
 
-        // 3. Run Inference
-        var inputs = new List<NamedOnnxValue>
+        try
         {
-            NamedOnnxValue.CreateFromTensor(_inputName ?? "x", tensor)
-        };
+            var memory = new Memory<float>(rentedArray, 0, totalElements);
+            var tensor = new DenseTensor<float>(memory, new[] { 1, 3, targetH, targetW });
+            FillNormalizedTensor(image, tensor, targetW, targetH);
 
-        using var results = _session!.Run(inputs);
-        var outputTensor = results[0].AsTensor<float>();
+            // 3. Run Inference
+            var inputs = new List<NamedOnnxValue>
+            {
+                NamedOnnxValue.CreateFromTensor(_inputName ?? "x", tensor)
+            };
 
-        // 4. Binarize probability map and extract bounding quads
-        var quads = ExtractQuadsFromProbabilityMap(outputTensor, targetW, targetH, origW, origH, minConfidence);
-        return quads;
+            using var results = _session!.Run(inputs);
+            var outputTensor = results[0].AsTensor<float>();
+
+            // 4. Binarize probability map and extract bounding quads
+            var quads = ExtractQuadsFromProbabilityMap(outputTensor, targetW, targetH, origW, origH, minConfidence);
+            return quads;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<float>.Shared.Return(rentedArray);
+        }
     }
 
     private static void FillNormalizedTensor(

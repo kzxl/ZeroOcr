@@ -7,10 +7,14 @@ using ZeroOcr.Core.Imaging;
 using ZeroOcr.Core.Interfaces;
 using ZeroOcr.Core.Models;
 using ZeroOcr.Inference.Abstractions;
+using ZeroOcr.Inference.Classifiers;
 using ZeroOcr.Inference.Detectors;
 using ZeroOcr.Inference.Geometry;
+using ZeroOcr.Inference.ModelHub;
 using ZeroOcr.Inference.Options;
+using ZeroOcr.Inference.PostProcessing;
 using ZeroOcr.Inference.Recognizers;
+using ZeroOcr.Inference.Vocab;
 
 namespace ZeroOcr.Inference.Engines;
 
@@ -43,6 +47,29 @@ public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
         _recognizer = recognizer ?? new SvtrTextRecognizer();
         _classifier = classifier;
         _ownsComponents = ownsComponents;
+    }
+
+    /// <summary>
+    /// Creates an engine instance by discovering or loading model files from a ModelBundle.
+    /// </summary>
+    public static ZeroDeepOcrEngine FromModelBundle(
+        DeepOcrModelBundle? bundle = null,
+        bool preferGpu = true)
+    {
+        bundle ??= DeepOcrModelBundle.Discover();
+        var sessionOpts = DeepOcrSessionOptions.Create(preferGpu);
+
+        var detector = new DbNetTextDetector(bundle.DetectionModelPath, sessionOpts);
+        var recognizer = new SvtrTextRecognizer(
+            bundle.RecognitionModelPath,
+            bundle.HasVocab ? VietnameseCharacterMap.FromFile(bundle.VocabPath!) : VietnameseCharacterMap.Default,
+            sessionOpts);
+
+        TextDirectionClassifier? classifier = bundle.HasClassifierModel
+            ? new TextDirectionClassifier(bundle.ClassifierModelPath, sessionOpts)
+            : null;
+
+        return new ZeroDeepOcrEngine(detector, recognizer, classifier, ownsComponents: true);
     }
 
     public bool IsLanguageSupported(string languageTag)
@@ -128,6 +155,15 @@ public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
 
                 if (line != null && line.Confidence >= minConfidence)
                 {
+                    if (deepOptions?.Preset == DeepOcrPreset.IndustrialDotMatrix)
+                    {
+                        string disambiguated = IndustrialLexiconMatcher.DisambiguateDateCode(line.Text);
+                        if (!string.Equals(disambiguated, line.Text, StringComparison.Ordinal))
+                        {
+                            line = new OcrLine(disambiguated, line.Words, line.BoundingBox, line.Confidence, line.AngleDegrees);
+                        }
+                    }
+
                     lines.Add(line);
                 }
             }

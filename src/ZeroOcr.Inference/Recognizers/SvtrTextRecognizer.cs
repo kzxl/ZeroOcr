@@ -84,40 +84,62 @@ public sealed class SvtrTextRecognizer : ITextRecognizer
         float aspect = (float)srcW / Math.Max(1, srcH);
         int targetW = Math.Max(32, Math.Min(960, (int)Math.Round(targetH * aspect)));
 
-        var tensor = new DenseTensor<float>(new[] { 1, 3, targetH, targetW });
-        FillNormalizedTensor(linePatch, tensor, targetW, targetH);
+        int totalElements = 3 * targetH * targetW;
+        float[] rentedTensor = System.Buffers.ArrayPool<float>.Shared.Rent(totalElements);
+        float[]? rentedBuffer = null;
 
-        var inputs = new List<NamedOnnxValue>
+        try
         {
-            NamedOnnxValue.CreateFromTensor(_inputName ?? "x", tensor)
-        };
+            var memory = new Memory<float>(rentedTensor, 0, totalElements);
+            var tensor = new DenseTensor<float>(memory, new[] { 1, 3, targetH, targetW });
+            FillNormalizedTensor(linePatch, tensor, targetW, targetH);
 
-        using var results = _session!.Run(inputs);
-        var outputTensor = results[0].AsTensor<float>();
-
-        // Output shape: [1, TimeSteps, VocabSize]
-        int timeSteps = outputTensor.Dimensions[1];
-        int vocabSize = outputTensor.Dimensions[2];
-
-        // Flatten or slice logits for CTC greedy decode
-        var buffer = new float[timeSteps * vocabSize];
-        for (int t = 0; t < timeSteps; t++)
-        {
-            for (int c = 0; c < vocabSize; c++)
+            var inputs = new List<NamedOnnxValue>
             {
-                buffer[t * vocabSize + c] = outputTensor[0, t, c];
+                NamedOnnxValue.CreateFromTensor(_inputName ?? "x", tensor)
+            };
+
+            using var results = _session!.Run(inputs);
+            var outputTensor = results[0].AsTensor<float>();
+
+            // Output shape: [1, TimeSteps, VocabSize]
+            int timeSteps = outputTensor.Dimensions[1];
+            int vocabSize = outputTensor.Dimensions[2];
+            int totalLogits = timeSteps * vocabSize;
+
+            rentedBuffer = System.Buffers.ArrayPool<float>.Shared.Rent(totalLogits);
+            for (int t = 0; t < timeSteps; t++)
+            {
+                int rowOffset = t * vocabSize;
+                for (int c = 0; c < vocabSize; c++)
+                {
+                    rentedBuffer[rowOffset + c] = outputTensor[0, t, c];
+                }
+            }
+
+            var decoded = CtcDecoder.DecodeGreedy(
+                new ReadOnlySpan<float>(rentedBuffer, 0, totalLogits), 
+                timeSteps, 
+                vocabSize, 
+                _charMap);
+
+            string normalizedText = VietnameseNfcNormalizer.Normalize(decoded.Text);
+
+            if (string.IsNullOrWhiteSpace(normalizedText))
+                return null;
+
+            // Build word tokens
+            var words = BuildWords(normalizedText, quad, decoded.MeanConfidence);
+            return new OcrLine(normalizedText, words, quad.GetBoundingRect(), decoded.MeanConfidence);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<float>.Shared.Return(rentedTensor);
+            if (rentedBuffer != null)
+            {
+                System.Buffers.ArrayPool<float>.Shared.Return(rentedBuffer);
             }
         }
-
-        var decoded = CtcDecoder.DecodeGreedy(buffer, timeSteps, vocabSize, _charMap);
-        string normalizedText = VietnameseNfcNormalizer.Normalize(decoded.Text);
-
-        if (string.IsNullOrWhiteSpace(normalizedText))
-            return null;
-
-        // Build word tokens
-        var words = BuildWords(normalizedText, quad, decoded.MeanConfidence);
-        return new OcrLine(normalizedText, words, quad.GetBoundingRect(), decoded.MeanConfidence);
     }
 
     private static void FillNormalizedTensor(

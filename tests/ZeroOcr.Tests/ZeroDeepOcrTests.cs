@@ -7,6 +7,7 @@ using ZeroOcr.Core.Interfaces;
 using ZeroOcr.Core.Models;
 using ZeroOcr.Inference.Engines;
 using ZeroOcr.Inference.Geometry;
+using ZeroOcr.Inference.ModelHub;
 using ZeroOcr.Inference.Options;
 using ZeroOcr.Inference.PostProcessing;
 using ZeroOcr.Inference.Vocab;
@@ -156,5 +157,64 @@ public class ZeroDeepOcrTests
         var cancelResult = await engine.RecognizeAsync(buffer, options, cts.Token);
         Assert.False(cancelResult.Success);
         Assert.Contains("canceled", cancelResult.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void IndustrialLexiconMatcher_DisambiguatesDateCodes_CorrectsLetterSubstitutions()
+    {
+        string raw1 = "EXP: 2O26/I2/3I";
+        string fixed1 = IndustrialLexiconMatcher.DisambiguateDateCode(raw1);
+        Assert.Equal("EXP: 2026/12/31", fixed1);
+
+        string raw2 = "HSD: 2O26.O9.O4";
+        string fixed2 = IndustrialLexiconMatcher.DisambiguateDateCode(raw2);
+        Assert.Equal("HSD: 2026.09.04", fixed2);
+
+        string raw3 = "LOT: B123";
+        string fixed3 = IndustrialLexiconMatcher.DisambiguateDateCode(raw3);
+        // LOT B is not flanked by digits, remains unchanged
+        Assert.Equal("LOT: B123", fixed3);
+    }
+
+    [Fact]
+    public void IndustrialLexiconMatcher_LevenshteinDistance_ComputesCorrectDistances()
+    {
+        Assert.Equal(0, IndustrialLexiconMatcher.LevenshteinDistance("HSD".AsSpan(), "HSD".AsSpan()));
+        Assert.Equal(1, IndustrialLexiconMatcher.LevenshteinDistance("HSD".AsSpan(), "H5D".AsSpan()));
+        Assert.Equal(1, IndustrialLexiconMatcher.LevenshteinDistance("EXP".AsSpan(), "EX".AsSpan()));
+        Assert.Equal(3, IndustrialLexiconMatcher.LevenshteinDistance("BATCH".AsSpan(), "B4T".AsSpan()));
+
+        // Fuzzy prefix match
+        Assert.Equal("HSD", IndustrialLexiconMatcher.TryFuzzyMatchPrefix("H5D:"));
+        Assert.Equal("EXP", IndustrialLexiconMatcher.TryFuzzyMatchPrefix("EXP."));
+        Assert.Equal("LOT", IndustrialLexiconMatcher.TryFuzzyMatchPrefix("L0T:"));
+    }
+
+    [Fact]
+    public void DeepOcrModelBundle_DiscoversStandardPaths()
+    {
+        var bundle = DeepOcrModelBundle.Discover();
+        Assert.NotNull(bundle);
+        // No crash even if files do not yet exist
+        Assert.False(bundle.HasDetectionModel && string.IsNullOrEmpty(bundle.DetectionModelPath));
+    }
+
+    [Fact]
+    public void DeepOcrSessionOptions_CreatesOptimizedSessionOptions()
+    {
+        using var options = DeepOcrSessionOptions.Create(preferGpu: true);
+        Assert.NotNull(options);
+    }
+
+    [Fact]
+    public void OcrEngineRegistry_RegistersDeepOcr_ResolvesViaRegistry()
+    {
+        var registry = new ZeroOcr.Core.Engines.OcrEngineRegistry();
+        ZeroOcr.Inference.DeepOcrRegistrationExtensions.RegisterDeepOcr(registry, setAsDefault: true);
+
+        var engine = registry.GetEngine();
+        Assert.NotNull(engine);
+        Assert.Equal("ZeroPlatform.DeepOcr.Sovereign", engine.Name);
+        Assert.True(engine.IsAvailable);
     }
 }
