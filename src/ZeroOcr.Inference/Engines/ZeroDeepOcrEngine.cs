@@ -1,0 +1,175 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using ZeroOcr.Core.Imaging;
+using ZeroOcr.Core.Interfaces;
+using ZeroOcr.Core.Models;
+using ZeroOcr.Inference.Abstractions;
+using ZeroOcr.Inference.Detectors;
+using ZeroOcr.Inference.Geometry;
+using ZeroOcr.Inference.Options;
+using ZeroOcr.Inference.Recognizers;
+
+namespace ZeroOcr.Inference.Engines;
+
+/// <summary>
+/// Sovereign high-performance deep learning OCR engine for ZeroPlatform.
+/// Replaces legacy Windows.Media.Ocr with cross-platform 2-stage DBNet++ and RepSVTR models.
+/// Supports industrial inkjet dot-matrix fusion, full Vietnamese diacritics, and true token confidence.
+/// </summary>
+public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
+{
+    private readonly ITextDetector _detector;
+    private readonly ITextRecognizer _recognizer;
+    private readonly ITextDirectionClassifier? _classifier;
+    private readonly bool _ownsComponents;
+    private bool _disposed;
+
+    public string Name => "ZeroPlatform.DeepOcr.Sovereign";
+
+    public bool IsAvailable => _detector.IsReady && _recognizer.IsReady;
+
+    public IReadOnlyList<string> SupportedLanguages => _recognizer.SupportedLanguages;
+
+    public ZeroDeepOcrEngine(
+        ITextDetector? detector = null,
+        ITextRecognizer? recognizer = null,
+        ITextDirectionClassifier? classifier = null,
+        bool ownsComponents = true)
+    {
+        _detector = detector ?? new DbNetTextDetector();
+        _recognizer = recognizer ?? new SvtrTextRecognizer();
+        _classifier = classifier;
+        _ownsComponents = ownsComponents;
+    }
+
+    public bool IsLanguageSupported(string languageTag)
+    {
+        if (string.IsNullOrWhiteSpace(languageTag)) return true;
+        foreach (var lang in SupportedLanguages)
+        {
+            if (string.Equals(lang, languageTag, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    public async Task<OcrResult> RecognizeAsync(
+        OcrImageBuffer image,
+        OcrOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (image == null) throw new ArgumentNullException(nameof(image));
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!IsAvailable)
+                return OcrResult.Failed("Deep OCR Engine is not initialized or ready.", sw.Elapsed);
+
+            var deepOptions = options as ZeroDeepOcrOptions;
+
+            // 1. Region of Interest (ROI) Cropping
+            OcrImageBuffer workingBuffer = image;
+            bool isRentedCropped = false;
+
+            if (options?.RegionOfInterest is { } roi && !roi.IsEmpty)
+            {
+                workingBuffer = image.Crop(roi);
+                isRentedCropped = true;
+            }
+
+            // 2. Pre-processing: Morphological Dot-Matrix Bridging for Industrial Packaging
+            bool applyDotMatrix = deepOptions?.ApplyDotMatrixFusion ??
+                                 (deepOptions?.Preset == DeepOcrPreset.IndustrialDotMatrix);
+
+            OcrImageBuffer? morphedBuffer = null;
+            if (applyDotMatrix && workingBuffer.Format == OcrPixelFormat.Gray8)
+            {
+                morphedBuffer = OcrMorphology.Close(workingBuffer, StructuringElement.Cross3x3());
+            }
+
+            OcrImageBuffer detectionSource = morphedBuffer ?? workingBuffer;
+
+            // 3. Stage 1: Text Detection (DBNet++) -> Oriented Quadrilaterals
+            float detThreshold = deepOptions?.DetectionThreshold ?? 0.3f;
+            var quads = await _detector.DetectQuadsAsync(detectionSource, detThreshold, cancellationToken);
+
+            if (quads.Count == 0)
+            {
+                morphedBuffer?.Dispose();
+                if (isRentedCropped) workingBuffer.Dispose();
+                return OcrResult.Create(Array.Empty<OcrLine>(), sw.Elapsed, options?.LanguageTag);
+            }
+
+            // 4. Stage 2: Perspective Rectification & Sequence Recognition
+            var lines = new List<OcrLine>(quads.Count);
+            float minConfidence = options?.MinConfidence ?? 0.0f;
+
+            foreach (var quad in quads)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Extract & rectify angled text region to a straight horizontal strip
+                using var linePatch = QuadPerspectiveTransformer.RectifyQuad(workingBuffer, quad, targetHeight: 48);
+
+                // Optional 180° Direction Rectification
+                if (_classifier != null && (deepOptions == null || deepOptions.EnableDirectionClassifier))
+                {
+                    _classifier.RectifyInPlace(linePatch);
+                }
+
+                // Sequence Recognition (RepSVTR)
+                var line = await _recognizer.RecognizeLineAsync(linePatch, quad, cancellationToken);
+
+                if (line != null && line.Confidence >= minConfidence)
+                {
+                    lines.Add(line);
+                }
+            }
+
+            morphedBuffer?.Dispose();
+            if (isRentedCropped) workingBuffer.Dispose();
+
+            sw.Stop();
+            return OcrResult.Create(lines, sw.Elapsed, options?.LanguageTag);
+        }
+        catch (OperationCanceledException)
+        {
+            return OcrResult.Failed("OCR operation was canceled.", sw.Elapsed);
+        }
+        catch (Exception ex)
+        {
+            return OcrResult.Failed($"Deep OCR processing failed: {ex.Message}", sw.Elapsed);
+        }
+    }
+
+    public Task<OcrResult> RecognizeAsync(
+        ReadOnlyMemory<byte> encodedImageBytes,
+        OcrOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        // For encoded images, caller can wrap bytes via OcrImageBuffer or dedicated codec
+        return Task.FromResult(OcrResult.Failed(
+            "Direct encoded byte recognition requires decoding into OcrImageBuffer before calling ZeroDeepOcrEngine.",
+            TimeSpan.Zero));
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            if (_ownsComponents)
+            {
+                _detector.Dispose();
+                _recognizer.Dispose();
+                _classifier?.Dispose();
+            }
+        }
+    }
+}

@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroOcr.Core\ZeroOcr.Core.csproj" />
+    <ProjectReference Include="..\..\src\ZeroOcr.Inference\ZeroOcr.Inference.csproj" />
     <ProjectReference Include="..\..\src\ZeroOcr.Windows\ZeroOcr.Windows.csproj" />
   </ItemGroup>
 </Project>

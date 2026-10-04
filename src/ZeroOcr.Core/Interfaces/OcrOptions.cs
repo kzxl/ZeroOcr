@@ -6,7 +6,7 @@ namespace ZeroOcr.Core.Interfaces;
 /// <summary>
 /// Configuration options passed to an OCR engine for recognition.
 /// </summary>
-public sealed class OcrOptions
+public class OcrOptions
 {
     /// <summary>
     /// BCP-47 language tag (e.g. "en-US", "vi-VN", "zh-Hans-CN").

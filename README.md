@@ -29,11 +29,11 @@ graph TD
     subgraph ZeroOcr ["ZeroOcr (Tier 3 Perception)"]
         Core["ZeroOcr.Core\n(IOcrEngine, OcrResult, OcrBlock, OcrImageBuffer)"]:::t3
         Win["ZeroOcr.Windows\n(Windows.Media.Ocr / WinRT)"]:::t3
-        Onnx["ZeroOcr.Inference\n(Future: PaddleOCR/DBNet ONNX)"]:::t3
+        Onnx["ZeroOcr.Inference\n(Sovereign: DBNet++ & RepSVTR Deep OCR)"]:::t3
     end
 
     subgraph Foundations ["Foundations (Tier 1 & 0)"]
-        Gfx["ZeroGraphics / ZeroTensor"]:::t1
+        Gfx["ZeroGraphics / ZeroTensor / ZeroInference"]:::t1
     end
 
     Consumers --> Core
@@ -47,8 +47,9 @@ graph TD
 | Project | Target Frameworks | Responsibilities |
 | :--- | :--- | :--- |
 | **`ZeroOcr.Core`** | `netstandard2.0`, `net462`, `net8.0` | Pure C# zero-dependency OCR domain models (`OcrResult`, `OcrBlock`, `OcrLine`, `OcrWord`, `OcrRect`, `OcrQuad`), `IOcrEngine` contract, `OcrImageBuffer`, memory-safe image pre-processors (Otsu thresholding, grayscale conversion, inversion, ROI cropping), and `MockOcrEngine`. |
-| **`ZeroOcr.Windows`** | `net8.0-windows10.0.19041.0` | High-speed native Windows 10/11 WinRT OCR implementation via `Windows.Media.Ocr`. Features engine caching per BCP-47 language tag, zero-copy buffer transfer via `SoftwareBitmap`, skew angle detection, and structured token bounding box mapping. |
-| **`ZeroOcr.Tests`** | `net8.0-windows10.0.19041.0` | Full unit and integration test suite with synthetic images, spatial geometry validations, and engine lifecycles. |
+| **`ZeroOcr.Inference`** | `netstandard2.0`, `net8.0` | Sovereign cross-platform deep learning OCR engine (`ZeroDeepOcrEngine`, `DbNetTextDetector`, `SvtrTextRecognizer`, `QuadPerspectiveTransformer`, `CtcDecoder`). Delivers full Vietnamese diacritics, genuine token confidence scores, and industrial dot-matrix morphological bridging without Windows OS lock-in. |
+| **`ZeroOcr.Windows`** | `net8.0-windows10.0.19041.0` | Native Windows 10/11 WinRT fallback OCR implementation via `Windows.Media.Ocr`. Features engine caching per BCP-47 language tag, zero-copy buffer transfer via `SoftwareBitmap`, skew angle detection, and structured token bounding box mapping. |
+| **`ZeroOcr.Tests`** | `net8.0-windows10.0.19041.0` | Full unit and integration test suite with synthetic images, spatial geometry validations, deep learning pipeline tests, and engine lifecycles. |
 
 ---
 
