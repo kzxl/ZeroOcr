@@ -46,6 +46,30 @@ public sealed class ZeroDeepOcrOptions : OcrOptions
     public int MaxDetectionDimension { get; set; } = 960;
 
     /// <summary>
+    /// Minimum consecutive blank CTC frames to trigger automatic word boundary space reconstruction.
+    /// Set to 0 to disable automatic blank gap space insertion. Default is 8.
+    /// </summary>
+    public int BlankGapThreshold { get; set; } = 6;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to group and merge horizontally aligned text fragments on the same baseline.
+    /// Default is true.
+    /// </summary>
+    public bool MergeHorizontalLines { get; set; } = true;
+
+    /// <summary>
+    /// Maximum vertical baseline offset relative to line height for horizontal line merging.
+    /// Default is 0.45f.
+    /// </summary>
+    public float MaxBaselineOffsetRatio { get; set; } = 0.45f;
+
+    /// <summary>
+    /// Maximum horizontal gap between adjacent words relative to line height for horizontal line merging.
+    /// Default is 3.0f.
+    /// </summary>
+    public float MaxHorizontalGapRatio { get; set; } = 3.0f;
+
+    /// <summary>
     /// Creates options pre-configured for industrial date code and NSX/HSD inspection.
     /// </summary>
     public static ZeroDeepOcrOptions ForIndustrialPackaging(float minConfidence = 0.80f)
@@ -71,7 +95,9 @@ public sealed class ZeroDeepOcrOptions : OcrOptions
             LanguageTag = "vi-VN",
             MinConfidence = minConfidence,
             DetectionThreshold = 0.30f,
-            UnclipRatio = 1.6f
+            UnclipRatio = 1.8f,
+            BlankGapThreshold = 6,
+            MergeHorizontalLines = true
         };
     }
 }

@@ -124,6 +124,10 @@ public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
 
             // 3. Stage 1: Text Detection (DBNet++) -> Oriented Quadrilaterals
             float detThreshold = deepOptions?.DetectionThreshold ?? 0.3f;
+            if (_detector is DbNetTextDetector dbNet && deepOptions != null)
+            {
+                dbNet.UnclipRatio = deepOptions.UnclipRatio;
+            }
             var quads = await _detector.DetectQuadsAsync(detectionSource, detThreshold, cancellationToken);
 
             if (quads.Count == 0)
@@ -136,6 +140,11 @@ public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
             // 4. Stage 2: Perspective Rectification & Sequence Recognition
             var lines = new List<OcrLine>(quads.Count);
             float minConfidence = options?.MinConfidence ?? 0.0f;
+
+            if (_recognizer is SvtrTextRecognizer svtr)
+            {
+                svtr.BlankGapThreshold = deepOptions?.BlankGapThreshold ?? 2;
+            }
 
             foreach (var quad in quads)
             {
@@ -171,8 +180,21 @@ public sealed class ZeroDeepOcrEngine : IOcrEngine, IDisposable
             morphedBuffer?.Dispose();
             if (isRentedCropped) workingBuffer.Dispose();
 
+            // 5. Stage 3: Baseline Aggregation & Reading-Order Sorting
+            IReadOnlyList<OcrLine> finalLines = lines;
+            if (deepOptions == null || deepOptions.MergeHorizontalLines)
+            {
+                float baselineOffset = deepOptions?.MaxBaselineOffsetRatio ?? 0.45f;
+                float horizGap = deepOptions?.MaxHorizontalGapRatio ?? 3.0f;
+                finalLines = OcrLineMerger.MergeHorizontalLines(lines, baselineOffset, horizGap);
+            }
+            else
+            {
+                finalLines = OcrLineMerger.SortReadingOrder(lines);
+            }
+
             sw.Stop();
-            return OcrResult.Create(lines, sw.Elapsed, options?.LanguageTag);
+            return OcrResult.Create(finalLines, sw.Elapsed, options?.LanguageTag);
         }
         catch (OperationCanceledException)
         {

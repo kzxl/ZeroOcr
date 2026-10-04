@@ -31,6 +31,12 @@ public sealed class SvtrTextRecognizer : ITextRecognizer
 
     public IReadOnlyList<string> SupportedLanguages { get; } = new[] { "vi-VN", "en-US", "und" };
 
+    /// <summary>
+    /// Minimum consecutive blank frames to trigger word boundary space reconstruction.
+    /// Default is 6. Set to 0 to disable automatic blank gap space insertion.
+    /// </summary>
+    public int BlankGapThreshold { get; set; } = 6;
+
     public SvtrTextRecognizer(
         string? modelPath = null,
         VietnameseCharacterMap? charMap = null,
@@ -121,7 +127,9 @@ public sealed class SvtrTextRecognizer : ITextRecognizer
                 new ReadOnlySpan<float>(rentedBuffer, 0, totalLogits), 
                 timeSteps, 
                 vocabSize, 
-                _charMap);
+                _charMap,
+                blankIndex: 0,
+                blankGapThreshold: BlankGapThreshold);
 
             string normalizedText = VietnameseNfcNormalizer.Normalize(decoded.Text);
 

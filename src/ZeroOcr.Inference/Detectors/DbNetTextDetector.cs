@@ -27,6 +27,12 @@ public sealed class DbNetTextDetector : ITextDetector
 
     public bool IsReady => _session != null || true; // Always ready (heuristic fallback available)
 
+    /// <summary>
+    /// Gets or sets the polygon unclip expansion ratio.
+    /// Default is 1.8f (expands bounding quad by ~20% horizontally and ~22% vertically to preserve diacritics).
+    /// </summary>
+    public float UnclipRatio { get; set; } = 1.8f;
+
     public DbNetTextDetector(string? modelPath = null, SessionOptions? options = null)
     {
         if (!string.IsNullOrEmpty(modelPath) && File.Exists(modelPath))
@@ -95,7 +101,7 @@ public sealed class DbNetTextDetector : ITextDetector
             var outputTensor = results[0].AsTensor<float>();
 
             // 4. Binarize probability map and extract bounding quads
-            var quads = ExtractQuadsFromProbabilityMap(outputTensor, targetW, targetH, origW, origH, minConfidence);
+            var quads = ExtractQuadsFromProbabilityMap(outputTensor, targetW, targetH, origW, origH, minConfidence, UnclipRatio);
             return quads;
         }
         finally
@@ -165,7 +171,8 @@ public sealed class DbNetTextDetector : ITextDetector
         int mapH,
         int origW,
         int origH,
-        float minConfidence)
+        float minConfidence,
+        float unclipRatio = 1.8f)
     {
         var quads = new List<OcrQuad>();
         float scaleX = (float)origW / mapW;
@@ -227,11 +234,12 @@ public sealed class DbNetTextDetector : ITextDetector
                     // Filter out tiny noise (area threshold)
                     if (count >= 16)
                     {
-                        // Unclip polygon expansion (1.5 ratio)
+                        // Unclip polygon expansion preserving diacritics
                         float bw = maxX - minX + 1;
                         float bh = maxY - minY + 1;
-                        float unclipX = bw * 0.15f;
-                        float unclipY = bh * 0.15f;
+                        float unclipFactor = Math.Max(0.12f, (unclipRatio - 1.0f) * 0.25f);
+                        float unclipX = bw * unclipFactor;
+                        float unclipY = bh * (unclipFactor * 1.15f);
 
                         float rx0 = Math.Max(0, (minX - unclipX) * scaleX);
                         float ry0 = Math.Max(0, (minY - unclipY) * scaleY);
