@@ -27,15 +27,13 @@ public class VietnameseImageRecognitionTests
     [Fact]
     public async Task Benchmark_VietnameseRealImages_CompareWindowsOcrAndDeepOcr()
     {
-        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        string samplesDir = Path.Combine(baseDir, "..", "..", "..", "samples", "sample");
+        string repoRoot = FindRepoRoot();
+        string samplesDir = Path.Combine(repoRoot, "tests", "samples", "sample");
         if (!Directory.Exists(samplesDir))
         {
-            // Fallback to source directory path if output directory does not copy samples
-            samplesDir = @"e:\15. Other\ZeroUniverse\ZeroPlatform\ZeroOcr\tests\samples\sample";
+            _output.WriteLine($"Sample directory not found: {samplesDir}. Skipping benchmark.");
+            return;
         }
-
-        Assert.True(Directory.Exists(samplesDir), $"Sample directory not found: {samplesDir}");
 
         // Pick diverse Vietnamese real-world samples
         string[] testFiles = new[]
@@ -50,7 +48,7 @@ public class VietnameseImageRecognitionTests
         // Initialize Engines
         var winEngine = new WindowsOcrEngine();
         
-        string modelDir = @"e:\15. Other\ZeroUniverse\ZeroPlatform\ZeroOcr\models\ocr";
+        string modelDir = Path.Combine(repoRoot, "models", "ocr");
         var bundle = new DeepOcrModelBundle
         {
             DetectionModelPath = Path.Combine(modelDir, "dbnet_det.onnx"),
@@ -98,6 +96,22 @@ public class VietnameseImageRecognitionTests
                 _output.WriteLine($"    [DeepOcr]: \"{line.Text}\" (Conf: {line.Confidence:P1})");
             }
         }
+    }
+
+    private static string FindRepoRoot()
+    {
+        string? current = AppDomain.CurrentDomain.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (File.Exists(Path.Combine(current, "ZeroOcr.slnx")) ||
+                File.Exists(Path.Combine(current, "Directory.Build.props")) ||
+                Directory.Exists(Path.Combine(current, ".git")))
+            {
+                return current;
+            }
+            current = Directory.GetParent(current)?.FullName;
+        }
+        return AppDomain.CurrentDomain.BaseDirectory;
     }
 
     private static OcrImageBuffer LoadBufferFromImageFile(string filePath)

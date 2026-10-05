@@ -40,6 +40,10 @@ jobs:
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: dotnet pack src/ZeroOcr.Core/ZeroOcr.Core.csproj -c Release -o nupkgs
 
+      - name: Pack ZeroOcr.Inference
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: dotnet pack src/ZeroOcr.Inference/ZeroOcr.Inference.csproj -c Release -o nupkgs
+
       - name: Pack ZeroOcr.Windows
         if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: dotnet pack src/ZeroOcr.Windows/ZeroOcr.Windows.csproj -c Release -o nupkgs
