@@ -1,5 +1,6 @@
 # ZeroOcr
 
+[![NuGet Version](https://img.shields.io/badge/nuget-v1.1.0-blue.svg)](https://github.com/kzxl/ZeroOcr)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET Multi-Targeting](https://img.shields.io/badge/.NET-8.0%20%7C%204.6.2%20%7C%20Standard%202.0-purple.svg)](https://dotnet.microsoft.com/)
 [![Ecosystem](https://img.shields.io/badge/ZeroPlatform-Tier%203%20Perception-701a75.svg)](../../README.md)
@@ -46,8 +47,8 @@ graph TD
 
 | Project | Target Frameworks | Responsibilities |
 | :--- | :--- | :--- |
-| **`ZeroOcr.Core`** | `netstandard2.0`, `net462`, `net8.0` | Pure C# zero-dependency OCR domain models (`OcrResult`, `OcrBlock`, `OcrLine`, `OcrWord`, `OcrRect`, `OcrQuad`), `IOcrEngine` contract, `OcrImageBuffer`, memory-safe image pre-processors (Otsu thresholding, grayscale conversion, inversion, ROI cropping), and `MockOcrEngine`. |
-| **`ZeroOcr.Inference`** | `netstandard2.0`, `net8.0` | Sovereign cross-platform deep learning OCR engine (`ZeroDeepOcrEngine`, `DbNetTextDetector`, `SvtrTextRecognizer`, `QuadPerspectiveTransformer`, `CtcDecoder`). Delivers full Vietnamese diacritics, genuine token confidence scores, and industrial dot-matrix morphological bridging without Windows OS lock-in. |
+| **`ZeroOcr.Core`** | `netstandard2.0`, `net462`, `net8.0` | Pure C# zero-dependency OCR domain models (`OcrResult`, `OcrBlock`, `OcrLine`, `OcrWord`, `OcrRect`, `OcrQuad`), `IOcrEngine` contract, `OcrImageBuffer`, memory-safe image pre-processors (Otsu thresholding, grayscale conversion, inversion, ROI cropping), Table Structure Recognition (TSR), and `MockOcrEngine`. |
+| **`ZeroOcr.Inference`** | `netstandard2.0`, `net462`, `net8.0` | Sovereign cross-platform deep learning OCR engine (`ZeroDeepOcrEngine`, `DbNetTextDetector`, `SvtrTextRecognizer`, `QuadPerspectiveTransformer`, `CtcDecoder`). Delivers full Vietnamese diacritics, genuine token confidence scores, ArrayPool tensor pooling, DirectML GPU acceleration, and industrial dot-matrix morphological bridging. |
 | **`ZeroOcr.Windows`** | `net8.0-windows10.0.19041.0` | Native Windows 10/11 WinRT fallback OCR implementation via `Windows.Media.Ocr`. Features engine caching per BCP-47 language tag, zero-copy buffer transfer via `SoftwareBitmap`, skew angle detection, and structured token bounding box mapping. |
 | **`ZeroOcr.Tests`** | `net8.0-windows10.0.19041.0` | Full unit and integration test suite with synthetic images, spatial geometry validations, deep learning pipeline tests, and engine lifecycles. |
 
@@ -136,16 +137,27 @@ var result = await ocr.RecognizeAsync(imageBuffer, options);
 
 ---
 
+---
+
 ## Target Frameworks
 
-- `.NET Standard 2.0` (Core Abstractions)
-- `.NET Framework 4.6.2` (Core Abstractions)
-- `.NET 8.0` (Core Abstractions)
+- `.NET Standard 2.0` (Core Abstractions & Inference)
+- `.NET Framework 4.6.2` (Core Abstractions & Inference)
+- `.NET 8.0` (Core Abstractions & Inference)
 - `.NET 8.0-windows10.0.19041.0` (Native Windows Engine & Tests)
+
+---
+
+## 📅 Version History & Milestones
+
+| Version | Release Date | Key Milestones & Highlights |
+| :--- | :---: | :--- |
+| **`v1.1.0`** | 2026-10-05 | **Sovereign Deep OCR, Table Structure Recognition (TSR) & Multi-Framework Support**:<br/>• **Table Structure Recognition (TSR)**: Extract tabular grid structures directly from OCR results with export to `System.Data.DataTable` and Markdown.<br/>• **Multi-Targeting Expansion**: Added native `.NET Framework 4.6.2` (`net462`) target for both `ZeroOcr.Core` and `ZeroOcr.Inference`.<br/>• **DirectML GPU Acceleration & Tensor Pooling**: `ZeroDeepOcrEngine` integration with `ArrayPool` tensor pooling and DirectML session provider.<br/>• **Vietnamese Diacritics Accuracy**: Enhanced CTC decoder with blank token alignment and real-world benchmark verification.<br/>• **Adaptive Hybrid PDF OCR**: High-accuracy vector text extraction with fallback to raster OCR. |
+| **`v1.0.0`** | 2026-09-20 | **Initial Industrial Release**:<br/>• Core domain abstractions (`IOcrEngine`, `OcrResult`, `OcrBlock`, `OcrLine`, `OcrWord`, `OcrRect`, `OcrQuad`).<br/>• Native Windows WinRT fallback engine (`WindowsOcrEngine`).<br/>• Memory-safe image pre-processing (Otsu thresholding, ROI cropping, grayscale conversion). |
 
 ---
 
 ## License
 
-MIT License. Copyright © 2026 Phong Võ.
+MIT License. Copyright © 2026 Phong Võ.  
 Part of the ZeroPlatform Industrial Ecosystem.
