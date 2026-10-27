@@ -1,3 +1,13 @@
+> [!IMPORTANT]
+> ### 🏛️ REPOSITORY CONSOLIDATION NOTICE
+> **This repository has been officially consolidated into the unified [ZeroPlatform Sovereign Monorepo](https://github.com/kzxl/ZeroPlatform).**  
+> All active development, issues, pull requests, and new releases take place in the central repository:  
+> 👉 **[kzxl/ZeroPlatform/tree/master/ZeroOcr](https://github.com/kzxl/ZeroPlatform/tree/master/ZeroOcr)**
+> 
+> *This repository is archived and preserved for historical reference and permanent package links.*
+
+---
+
 # ZeroOcr
 
 [![NuGet Version](https://img.shields.io/badge/nuget-v1.1.0-blue.svg)](https://github.com/kzxl/ZeroOcr)
